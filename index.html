@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BFLSiber // Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- bcrypt.js — used for admin password hashing only -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#000;--surface:#0a0a0a;--border:#1a1a1a;--green:#00ff41;--red:#ff3131;
+  --yellow:#ffd700;--text:#e8e8e8;--muted:#555;--mono:'Space Mono',monospace;--sans:'Inter',sans-serif;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
+/* ── LOGIN ── */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+.login-box{width:100%;max-width:360px}
+.tag{font-family:var(--mono);font-size:.65rem;color:var(--green);letter-spacing:.2em;margin-bottom:1.5rem}
+.login-box h1{font-size:1.6rem;font-weight:300;letter-spacing:-.02em;margin-bottom:.4rem}
+.login-box p{font-size:.8rem;color:var(--muted);margin-bottom:2rem}
+.field{margin-bottom:1.1rem}
+label{display:block;font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.1em;margin-bottom:.35rem}
+input[type=text],input[type=password],textarea{
+  width:100%;background:#0d0d0d;border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:.85rem;padding:.65rem .9rem;border-radius:3px;outline:none;
+  transition:border-color .15s;resize:vertical
+}
+input:focus,textarea:focus{border-color:var(--green)}
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:var(--green);color:#000;font-family:var(--mono);font-size:.8rem;font-weight:700;
+  padding:.7rem 1.2rem;border:none;border-radius:3px;cursor:pointer;transition:opacity .15s
+}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:#333;opacity:1}
+.btn-red{background:var(--red);color:#fff}
+.btn-yellow{background:var(--yellow);color:#000}
+.btn-sm{font-size:.7rem;padding:.45rem .8rem}
+.err{color:var(--red);font-family:var(--mono);font-size:.72rem;margin-top:.75rem;display:none}
+/* ── SHELL ── */
+#shell{display:none;height:100vh;flex-direction:column}
+nav{
+  display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);
+  background:#050505;flex-shrink:0;overflow-x:auto;padding:0 1rem
+}
+.logo{font-family:var(--mono);font-size:.85rem;padding:.9rem 1rem .9rem 0;margin-right:1rem;
+  color:var(--green);white-space:nowrap;border-right:1px solid var(--border)}
+.tab{
+  font-family:var(--mono);font-size:.7rem;color:var(--muted);cursor:pointer;
+  padding:.9rem .85rem;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+.tab-sep{margin-left:auto;display:flex;align-items:center;gap:.5rem;padding:.5rem 0}
+.logout-btn{font-family:var(--mono);font-size:.7rem;color:var(--muted);cursor:pointer;
+  padding:.4rem .7rem;border:1px solid transparent;border-radius:3px;transition:all .15s}
+.logout-btn:hover{color:var(--red);border-color:var(--red)}
+main{flex:1;overflow-y:auto;padding:2rem;max-width:820px;width:100%;margin:0 auto}
+.page{display:none}.page.active{display:block}
+.page-label{font-family:var(--mono);font-size:.65rem;color:var(--green);letter-spacing:.2em;margin-bottom:.6rem}
+h2{font-size:1.35rem;font-weight:300;letter-spacing:-.02em;margin-bottom:1.75rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1.25rem 1.5rem;margin-bottom:.75rem}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.5rem}
+.card-title{font-size:.95rem;font-weight:500}
+.card-date{font-family:var(--mono);font-size:.65rem;color:var(--muted);white-space:nowrap}
+.card-body{font-size:.85rem;color:#aaa;line-height:1.65;margin-top:.5rem}
+.card-foot{display:flex;gap:.5rem;margin-top:.85rem;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:3px}
+.badge-green{background:rgba(0,255,65,.1);color:var(--green)}
+.badge-red{background:rgba(255,49,49,.1);color:var(--red)}
+.badge-yellow{background:rgba(255,215,0,.1);color:var(--yellow)}
+.mono-box{
+  background:#050505;border:1px solid var(--border);border-radius:3px;
+  font-family:var(--mono);font-size:.8rem;padding:.75rem 1rem;
+  color:var(--green);word-break:break-all;line-height:1.7;position:relative
+}
+.copy-btn{
+  position:absolute;top:.5rem;right:.5rem;font-family:var(--mono);font-size:.6rem;
+  background:#111;color:var(--muted);border:1px solid var(--border);
+  padding:.2rem .5rem;border-radius:2px;cursor:pointer;transition:all .15s
+}
+.copy-btn:hover{color:var(--green);border-color:var(--green)}
+.row{display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.25rem}
+.col{flex:1;min-width:160px}
+.sep{height:1px;background:var(--border);margin:2rem 0}
+.flash{font-family:var(--mono);font-size:.72rem;margin-top:.75rem;display:none;padding:.5rem .75rem;border-radius:3px}
+.flash.ok{background:rgba(0,255,65,.08);color:var(--green);display:block}
+.flash.bad{background:rgba(255,49,49,.08);color:var(--red);display:block}
+/* lockout banner */
+#lockoutMsg{color:var(--yellow);font-family:var(--mono);font-size:.72rem;margin-top:.75rem;display:none}
+/* rockyou progress */
+.rk-meta{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.rk-stat{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.rk-stat span{color:var(--text);display:block;font-size:.9rem;margin-top:.15rem}
+/* contact cards */
+.contact-name{font-weight:500;font-size:.9rem}
+.contact-email{font-family:var(--mono);font-size:.7rem;color:var(--green);margin:.2rem 0 .4rem}
+.contact-subject{font-family:var(--mono);font-size:.65rem;background:rgba(0,102,255,.1);color:#6699ff;
+  padding:2px 7px;border-radius:3px;display:inline-block;margin-bottom:.5rem}
+/* setup */
+.setup-info{font-size:.82rem;color:#888;line-height:1.7;margin-bottom:1.5rem}
+.setup-info code{font-family:var(--mono);font-size:.78rem;background:#111;padding:1px 5px;border-radius:2px;color:var(--green)}
+/* ctf warning badge */
+.ctf-warn{font-family:var(--mono);font-size:.68rem;background:rgba(255,215,0,.08);color:var(--yellow);
+  border:1px solid rgba(255,215,0,.2);border-radius:3px;padding:.4rem .75rem;margin-bottom:1rem;display:inline-block}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN ══════════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="tag">// BFLSiber</div>
+    <h1>Admin Paneli</h1>
+    <p>Bu sayfa sadece yöneticiye özeldir.</p>
+    <div class="field">
+      <label>şifre</label>
+      <input type="password" id="lpw" autocomplete="off" placeholder="••••••••">
+    </div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">Giriş →</button>
+    <div class="err" id="loginErr">Hatalı şifre.</div>
+    <div id="lockoutMsg"></div>
+  </div>
+</div>
+
+<!-- ══════════════ SHELL ══════════════ -->
+<div id="shell" style="display:none">
+  <nav>
+    <div class="logo">BFLSiber<span style="color:var(--muted)"> //admin</span></div>
+    <span class="tab active" data-page="announce" onclick="switchTab(this)">📣 Duyurular</span>
+    <span class="tab" data-page="flag" onclick="switchTab(this)">🚩 Flag</span>
+    <span class="tab" data-page="password" onclick="switchTab(this)">🔑 Şifre Rotasyonu</span>
+    <span class="tab" data-page="contacts" onclick="switchTab(this)">📬 Inbox</span>
+    <span class="tab" data-page="settings" onclick="switchTab(this)">⚙️ Ayarlar</span>
+    <div class="tab-sep">
+      <span class="logout-btn" onclick="logout()">çıkış</span>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ── ANNOUNCEMENTS ── -->
+    <div id="page-announce" class="page active">
+      <div class="page-label">// duyuru kanalı</div>
+      <h2>Duyuru Gönder</h2>
+
+      <div class="card">
+        <div class="field">
+          <label>başlık</label>
+          <input type="text" id="ann-title" placeholder="Yeni üye kaydı açıldı..." autocomplete="off">
+        </div>
+        <div class="field">
+          <label>mesaj</label>
+          <textarea id="ann-body" rows="5" placeholder="Duyuru metni buraya..."></textarea>
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.25rem">
+          <button class="btn" onclick="sendAnnouncement()">Gönder →</button>
+          <button class="btn btn-ghost btn-sm" onclick="previewAnnouncement()">Önizle</button>
+        </div>
+        <div class="flash" id="ann-flash"></div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="page-label">// gönderilmiş duyurular</div>
+      <div id="ann-list"></div>
+    </div>
+
+    <!-- ── FLAG ── -->
+    <div id="page-flag" class="page">
+      <div class="page-label">// ctf flag yönetimi</div>
+      <h2>Aktif Flag</h2>
+
+      <div class="card">
+        <div class="page-label" style="margin-bottom:.5rem">// ham flag (16 karakter)</div>
+        <div class="mono-box" id="flag-raw" style="margin-bottom:.75rem">
+          —
+          <button class="copy-btn" onclick="copyEl('flag-raw')">kopyala</button>
+        </div>
+
+        <div class="page-label" style="margin-bottom:.5rem">// md5 hash → public admin.html'e koy</div>
+        <div class="mono-box" id="flag-md5" style="margin-bottom:1rem">
+          —
+          <button class="copy-btn" onclick="copyEl('flag-md5')">kopyala</button>
+        </div>
+
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn" onclick="generateFlag()">Yeni Flag Üret</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyFlagSnippet()">JS Snippet Kopyala</button>
+        </div>
+        <div class="flash" id="flag-flash"></div>
+        <div class="sep" style="margin:1.25rem 0"></div>
+        <div class="page-label" style="margin-bottom:.5rem">// public admin.html için snippet</div>
+        <div class="mono-box" id="flag-snippet" style="font-size:.72rem;line-height:1.8;white-space:pre-wrap">
+          — flag üret →
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:.75rem">
+        <div class="page-label" style="margin-bottom:.5rem">// flag submission doğrulama</div>
+        <div class="row" style="margin-bottom:.5rem">
+          <div class="col">
+            <label>gönderilen flag</label>
+            <input type="text" id="flag-check-input" placeholder="FLAG{...} veya md5 hash" autocomplete="off">
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-bottom:0" onclick="checkFlag()">Kontrol Et</button>
+        </div>
+        <div class="flash" id="flag-check-flash"></div>
+      </div>
+    </div>
+
+    <!-- ── PASSWORD ROTATION ── -->
+    <div id="page-password" class="page">
+      <div class="page-label">// rockyou.txt rotasyonu</div>
+      <h2>Şifre Rotasyonu</h2>
+
+      <div class="ctf-warn">⚠ CTF CHALLENGE — Bu bölümdeki şifreler kasıtlı olarak zayıftır. Admin girişiyle ilgisi yoktur.</div>
+
+      <div class="card">
+        <div class="rk-meta">
+          <div class="rk-stat">Geçerli İndeks<span id="rk-idx">—</span></div>
+          <div class="rk-stat">Geçerli Şifre<span id="rk-cur" style="color:var(--yellow)">—</span></div>
+          <div class="rk-stat">MD5 Hash<span id="rk-md5" style="color:var(--green);font-size:.7rem">—</span></div>
+        </div>
+
+        <div class="page-label" style="margin-bottom:.5rem">// public admin.html'e gömülecek hash</div>
+        <div class="mono-box" id="rk-snippet" style="font-size:.72rem;line-height:1.8;white-space:pre-wrap">
+          — henüz rockyou.txt yüklenmedi —
+        </div>
+
+        <div class="sep" style="margin:1.25rem 0"></div>
+        <div class="page-label" style="margin-bottom:.75rem">// kontroller</div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn btn-yellow" onclick="rotatePassword()">⏭ Sonraki Şifre (Rotate)</button>
+          <button class="btn btn-ghost btn-sm" onclick="rotatePrev()">⏮ Önceki</button>
+          <button class="btn btn-ghost btn-sm" onclick="jumpToIdx()">İndekse Git</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyRkSnippet()">Snippet Kopyala</button>
+        </div>
+        <div class="flash" id="rk-flash"></div>
+      </div>
+
+      <div class="card" style="margin-top:.75rem">
+        <div class="page-label" style="margin-bottom:.75rem">// rockyou.txt yükle (ilk 100k satır yeterli)</div>
+        <p style="font-size:.8rem;color:#777;margin-bottom:.75rem">
+          Dosyayı buraya sürükle ya da seç. Tarayıcıda tutulacak, tekrar yükleme gerekmez.
+        </p>
+        <input type="file" id="rk-file" accept=".txt" onchange="loadRockyou(this)" style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">
+        <div class="flash" id="rk-load-flash"></div>
+      </div>
+    </div>
+
+    <!-- ── CONTACTS ── -->
+    <div id="page-contacts" class="page">
+      <div class="page-label">// iletişim formu gönderileri</div>
+      <h2>Inbox</h2>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem">
+        Kullanıcıların bflsiber.pages.dev/contact.html üzerinden gönderdiği mesajlar.
+        Aynı tarayıcıda açıksan LocalStorage'dan otomatik çekilir.
+      </p>
+      <div id="contacts-list"></div>
+    </div>
+
+    <!-- ── SETTINGS ── -->
+    <div id="page-settings" class="page">
+      <div class="page-label">// ayarlar</div>
+      <h2>Admin Ayarları</h2>
+
+      <div class="card">
+        <div class="page-label" style="margin-bottom:.75rem">// admin şifresini değiştir</div>
+        <div class="field"><label>yeni şifre</label><input type="password" id="set-pw1" placeholder="••••••••" autocomplete="new-password"></div>
+        <div class="field"><label>tekrar</label><input type="password" id="set-pw2" placeholder="••••••••" autocomplete="new-password"></div>
+        <button class="btn" id="changePwBtn" onclick="changeAdminPw()">Şifreyi Güncelle</button>
+        <div class="flash" id="pw-flash"></div>
+      </div>
+
+      <div class="card" style="margin-top:.75rem">
+        <div class="page-label" style="margin-bottom:.75rem">// tehlikeli bölge</div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn btn-red btn-sm" onclick="clearAnnouncements()">Tüm Duyuruları Sil</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportData()">Veriyi Dışa Aktar (JSON)</button>
+        </div>
+        <div class="flash" id="settings-flash"></div>
+      </div>
+
+      <div class="card" style="margin-top:.75rem">
+        <div class="page-label" style="margin-bottom:.75rem">// public site entegrasyonu</div>
+        <p class="setup-info">
+          Duyurular ve flag bu admin panelinin <code>localStorage</code>'ına kaydedilir.
+          Public <code>bflsiber.pages.dev/admin.html</code> sayfasını aynı tarayıcıda çalıştırıyorsan
+          cross-origin yüzünden doğrudan okuyamaz — iki seçenek var:<br><br>
+          <strong>A) Manuel:</strong> "Snippet Kopyala" ile hash'i alıp admin.html'e yapıştır, commit at.<br>
+          <strong>B) GitHub Gist:</strong> Aşağıya kişisel erişim token'ını gir, duyurular otomatik olarak
+          herkese açık bir gist'e yazılır ve public site oradan okur.
+        </p>
+        <div class="field"><label>GitHub Personal Access Token (gist scope)</label>
+          <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" oninput="saveToken()">
+        </div>
+        <div class="field"><label>Gist ID (ilk kayıtta otomatik oluşturulur)</label>
+          <input type="text" id="gh-gist" placeholder="abc123def456..." autocomplete="off" oninput="saveGist()">
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="testGist()">Gist'i Test Et</button>
+          <button class="btn btn-ghost btn-sm" onclick="pushToGist()">Şimdi Gist'e Yaz</button>
+        </div>
+        <div class="flash" id="gist-flash"></div>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /shell -->
+
+<script>
+// ─────────────────────────────────────────────
+// STORAGE KEYS
+// ─────────────────────────────────────────────
+const K = {
+  adminHash: 'bfls_admin_hash',
+  // NOTE: session token lives in sessionStorage, not localStorage
+  anns:      'bfls_announcements',
+  flag:      'bfls_flag',
+  flagMd5:   'bfls_flag_md5',
+  rkWords:   'bfls_rockyou',
+  rkIdx:     'bfls_rk_idx',
+  rkMd5:     'bfls_rk_md5',
+  rkPw:      'bfls_rk_pw',
+  // GitHub token lives in sessionStorage only (cleared on tab close)
+  ghGist:    'bfls_gh_gist',
+};
+
+// ─────────────────────────────────────────────
+// BOOTSTRAP HASH  (bcrypt cost 12, password: "scarlet")
+// Replace this constant after changing your password via the Settings tab.
+// ─────────────────────────────────────────────
+const BOOTSTRAP_HASH = '$2b$12$ZBbvr95VYC6MK1hfAaPqc.BTpcww7C1Xbeo5XmiMiGKkwV5jXjCNy';
+
+// ─────────────────────────────────────────────
+// BRUTE-FORCE PROTECTION
+// ─────────────────────────────────────────────
+const MAX_ATTEMPTS   = 5;
+const LOCKOUT_MS     = 30000; // 30 seconds
+const ATTEMPT_DELAY  = 400;   // ms added per failed attempt
+
+let loginAttempts  = 0;
+let lockedUntil    = 0;
+
+function isLockedOut() {
+  return Date.now() < lockedUntil;
+}
+
+function remainingLockSecs() {
+  return Math.ceil((lockedUntil - Date.now()) / 1000);
+}
+
+function startLockoutTimer() {
+  const btn = document.getElementById('loginBtn');
+  const msg = document.getElementById('lockoutMsg');
+  btn.disabled = true;
+  const tick = () => {
+    if (!isLockedOut()) {
+      btn.disabled = false;
+      msg.style.display = 'none';
+      return;
+    }
+    msg.style.display = 'block';
+    msg.textContent = `⏳ Çok fazla hatalı deneme. ${remainingLockSecs()}s bekleyin.`;
+    setTimeout(tick, 500);
+  };
+  tick();
+}
+
+// ─────────────────────────────────────────────
+// MD5 (pure JS — CTF flag hashing only, NOT used for admin auth)
+// ─────────────────────────────────────────────
+function md5(s){
+  function safeAdd(x,y){var l=(x&0xFFFF)+(y&0xFFFF);return(((x>>16)+(y>>16)+(l>>16))<<16)|(l&0xFFFF)}
+  function bitRotateLeft(n,c){return(n<<c)|(n>>>(32-c))}
+  function md5cmn(q,a,b,x,s,t){return safeAdd(bitRotateLeft(safeAdd(safeAdd(a,q),safeAdd(x,t)),s),b)}
+  function md5ff(a,b,c,d,x,s,t){return md5cmn((b&c)|((~b)&d),a,b,x,s,t)}
+  function md5gg(a,b,c,d,x,s,t){return md5cmn((b&d)|(c&(~d)),a,b,x,s,t)}
+  function md5hh(a,b,c,d,x,s,t){return md5cmn(b^c^d,a,b,x,s,t)}
+  function md5ii(a,b,c,d,x,s,t){return md5cmn(c^(b|(~d)),a,b,x,s,t)}
+  var bs=[];
+  for(var i=0;i<s.length*2;i+=8)bs[i>>5]|=(s.charCodeAt(i/2)&0xFF)<<(i%32);
+  bs[s.length*4>>5]|=0x80<<(s.length*4%32);
+  bs[(((s.length*4+64)>>>9)<<4)+14]=s.length*4;
+  var a=1732584193,b=-271733879,c=-1732584194,d=271733878;
+  for(var i=0;i<bs.length;i+=16){
+    var oa=a,ob=b,oc=c,od=d;
+    a=md5ff(a,b,c,d,bs[i],7,-680876936);d=md5ff(d,a,b,c,bs[i+1],12,-389564586);
+    c=md5ff(c,d,a,b,bs[i+2],17,606105819);b=md5ff(b,c,d,a,bs[i+3],22,-1044525330);
+    a=md5ff(a,b,c,d,bs[i+4],7,-176418897);d=md5ff(d,a,b,c,bs[i+5],12,1200080426);
+    c=md5ff(c,d,a,b,bs[i+6],17,-1473231341);b=md5ff(b,c,d,a,bs[i+7],22,-45705983);
+    a=md5ff(a,b,c,d,bs[i+8],7,1770035416);d=md5ff(d,a,b,c,bs[i+9],12,-1958414417);
+    c=md5ff(c,d,a,b,bs[i+10],17,-42063);b=md5ff(b,c,d,a,bs[i+11],22,-1990404162);
+    a=md5ff(a,b,c,d,bs[i+12],7,1804603682);d=md5ff(d,a,b,c,bs[i+13],12,-40341101);
+    c=md5ff(c,d,a,b,bs[i+14],17,-1502002290);b=md5ff(b,c,d,a,bs[i+15],22,1236535329);
+    a=md5gg(a,b,c,d,bs[i+1],5,-165796510);d=md5gg(d,a,b,c,bs[i+6],9,-1069501632);
+    c=md5gg(c,d,a,b,bs[i+11],14,643717713);b=md5gg(b,c,d,a,bs[i],20,-373897302);
+    a=md5gg(a,b,c,d,bs[i+5],5,-701558691);d=md5gg(d,a,b,c,bs[i+10],9,38016083);
+    c=md5gg(c,d,a,b,bs[i+15],14,-660478335);b=md5gg(b,c,d,a,bs[i+4],20,-405537848);
+    a=md5gg(a,b,c,d,bs[i+9],5,568446438);d=md5gg(d,a,b,c,bs[i+14],9,-1019803690);
+    c=md5gg(c,d,a,b,bs[i+3],14,-187363961);b=md5gg(b,c,d,a,bs[i+8],20,1163531501);
+    a=md5gg(a,b,c,d,bs[i+13],5,-1444681467);d=md5gg(d,a,b,c,bs[i+2],9,-51403784);
+    c=md5gg(c,d,a,b,bs[i+7],14,1735328473);b=md5gg(b,c,d,a,bs[i+12],20,-1926607734);
+    a=md5hh(a,b,c,d,bs[i+5],4,-378558);d=md5hh(d,a,b,c,bs[i+8],11,-2022574463);
+    c=md5hh(c,d,a,b,bs[i+11],16,1839030562);b=md5hh(b,c,d,a,bs[i+14],23,-35309556);
+    a=md5hh(a,b,c,d,bs[i+1],4,-1530992060);d=md5hh(d,a,b,c,bs[i+4],11,1272893353);
+    c=md5hh(c,d,a,b,bs[i+7],16,-155497632);b=md5hh(b,c,d,a,bs[i+10],23,-1094730640);
+    a=md5hh(a,b,c,d,bs[i+13],4,681279174);d=md5hh(d,a,b,c,bs[i],11,-358537222);
+    c=md5hh(c,d,a,b,bs[i+3],16,-722521979);b=md5hh(b,c,d,a,bs[i+6],23,76029189);
+    a=md5hh(a,b,c,d,bs[i+9],4,-640364487);d=md5hh(d,a,b,c,bs[i+12],11,-421815835);
+    c=md5hh(c,d,a,b,bs[i+15],16,530742520);b=md5hh(b,c,d,a,bs[i+2],23,-995338651);
+    a=md5ii(a,b,c,d,bs[i],6,-198630844);d=md5ii(d,a,b,c,bs[i+7],10,1126891415);
+    c=md5ii(c,d,a,b,bs[i+14],15,-1416354905);b=md5ii(b,c,d,a,bs[i+5],21,-57434055);
+    a=md5ii(a,b,c,d,bs[i+12],6,1700485571);d=md5ii(d,a,b,c,bs[i+3],10,-1894986606);
+    c=md5ii(c,d,a,b,bs[i+10],15,-1051523);b=md5ii(b,c,d,a,bs[i+1],21,-2054922799);
+    a=md5ii(a,b,c,d,bs[i+8],6,1873313359);d=md5ii(d,a,b,c,bs[i+15],10,-30611744);
+    c=md5ii(c,d,a,b,bs[i+6],15,-1560198380);b=md5ii(b,c,d,a,bs[i+13],21,1309151649);
+    a=md5ii(a,b,c,d,bs[i+4],6,-145523070);d=md5ii(d,a,b,c,bs[i+11],10,-1120210379);
+    c=md5ii(c,d,a,b,bs[i+2],15,718787259);b=md5ii(b,c,d,a,bs[i+9],21,-343485551);
+    a=safeAdd(a,oa);b=safeAdd(b,ob);c=safeAdd(c,oc);d=safeAdd(d,od);
+  }
+  var hex='',chars=[a,b,c,d];
+  for(var j=0;j<4;j++){var v=chars[j];for(var k=0;k<4;k++){hex+=('0'+(((v>>>(k*8))&0xFF)).toString(16)).slice(-2)}}
+  return hex;
+}
+
+// random string (CSPRNG)
+function randStr(len=16){
+  const chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  const arr=new Uint8Array(len);crypto.getRandomValues(arr);
+  return Array.from(arr).map(b=>chars[b%chars.length]).join('');
+}
+
+// ─────────────────────────────────────────────
+// AUTH  (bcrypt via bcryptjs CDN)
+// ─────────────────────────────────────────────
+function getStoredHash() {
+  // Prefer a user-set hash in localStorage; fall back to the hard-coded bootstrap hash.
+  return localStorage.getItem(K.adminHash) || BOOTSTRAP_HASH;
+}
+
+async function doLogin() {
+  if (isLockedOut()) { startLockoutTimer(); return; }
+
+  const btn = document.getElementById('loginBtn');
+  const pw  = document.getElementById('lpw').value;
+  if (!pw) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Doğrulanıyor…';
+
+  try {
+    const match = await new Promise((resolve, reject) => {
+      dcodeIO.bcrypt.compare(pw, getStoredHash(), (err, res) => {
+        if (err) reject(err); else resolve(res);
+      });
+    });
+
+    if (match) {
+      loginAttempts = 0;
+      // Issue a cryptographically random session token in sessionStorage (tab-scoped)
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                         .map(b => b.toString(16).padStart(2,'0')).join('');
+      sessionStorage.setItem('bfls_admin_token', token);
+      showShell();
+    } else {
+      loginAttempts++;
+      if (loginAttempts >= MAX_ATTEMPTS) {
+        lockedUntil = Date.now() + LOCKOUT_MS;
+        startLockoutTimer();
+      } else {
+        // Progressive delay
+        await new Promise(r => setTimeout(r, ATTEMPT_DELAY * loginAttempts));
+        const el = document.getElementById('loginErr');
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+        btn.disabled = false;
+        btn.textContent = 'Giriş →';
+      }
+    }
+  } catch(e) {
+    console.error('Auth error', e);
+    btn.disabled = false;
+    btn.textContent = 'Giriş →';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('bfls_admin_token');
+  // Clear the in-session GitHub token too
+  sessionStorage.removeItem('bfls_gh_token');
+  location.reload();
+}
+
+function isAuthenticated() {
+  return !!sessionStorage.getItem('bfls_admin_token');
+}
+
+function showShell() {
+  document.getElementById('loginScreen').style.display = 'none';
+  const s = document.getElementById('shell');
+  s.style.display = 'flex';
+  s.style.flexDirection = 'column';
+  loadSettings(); renderAnnouncements(); renderRockyou(); renderContacts(); renderFlag();
+}
+
+window.addEventListener('load', () => {
+  // Restore session if token still present (same tab/session)
+  if (isAuthenticated()) { showShell(); return; }
+  const inp = document.getElementById('lpw');
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+});
+
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-' + el.dataset.page).classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+// ANNOUNCEMENTS
+// ─────────────────────────────────────────────
+function getAnns(){try{return JSON.parse(localStorage.getItem(K.anns)||'[]')}catch{return[]}}
+function saveAnns(arr){localStorage.setItem(K.anns,JSON.stringify(arr))}
+
+function sendAnnouncement(){
+  const t = document.getElementById('ann-title').value.trim();
+  const b = document.getElementById('ann-body').value.trim();
+  if (!t||!b){flash('ann-flash','Başlık ve mesaj gerekli.','bad');return}
+  const anns = getAnns();
+  anns.unshift({id: Date.now(), title: t, body: b, date: new Date().toISOString(), pinned: false});
+  saveAnns(anns);
+  document.getElementById('ann-title').value = '';
+  document.getElementById('ann-body').value  = '';
+  flash('ann-flash','Duyuru gönderildi ✓','ok');
+  renderAnnouncements();
+  maybePushGist();
+}
+
+function previewAnnouncement(){
+  const t = document.getElementById('ann-title').value.trim();
+  const b = document.getElementById('ann-body').value.trim();
+  if (!t&&!b){flash('ann-flash','Önizlenecek içerik yok.','bad');return}
+  // Safe preview: no innerHTML, plain text only via alert
+  alert('[ÖNİZLEME]\n\n' + t + '\n\n' + b);
+}
+
+function deleteAnn(id){
+  saveAnns(getAnns().filter(a => a.id !== id));
+  renderAnnouncements(); maybePushGist();
+}
+
+function togglePin(id){
+  const anns = getAnns();
+  const a = anns.find(x => x.id === id);
+  if (a) a.pinned = !a.pinned;
+  saveAnns(anns); renderAnnouncements();
+}
+
+function renderAnnouncements(){
+  const list = document.getElementById('ann-list');
+  const anns = getAnns();
+  if (!anns.length) {
+    list.innerHTML = '<div class="card" style="color:var(--muted);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">henüz duyuru yok</div>';
+    return;
+  }
+  // Build DOM nodes — no inline onclick with user-derived values
+  list.innerHTML = '';
+  anns.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="card-title">${esc(a.title)} ${a.pinned ? '<span class="badge badge-yellow">📌 sabit</span>' : ''}</div>
+        <div class="card-date">${new Date(a.date).toLocaleString('tr-TR')}</div>
+      </div>
+      <div class="card-body">${esc(a.body).replace(/\n/g,'<br>')}</div>
+      <div class="card-foot">
+        <button class="btn btn-ghost btn-sm" data-ann-id="${a.id}" data-action="pin">${a.pinned ? 'Sabitliği Kaldır' : '📌 Sabitle'}</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red)" data-ann-id="${a.id}" data-action="del">Sil</button>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+// Event delegation for announcement buttons — no user data in onclick
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-ann-id]');
+  if (!btn) return;
+  const id = parseInt(btn.dataset.annId, 10);
+  if (isNaN(id)) return;
+  if (btn.dataset.action === 'pin') togglePin(id);
+  if (btn.dataset.action === 'del') deleteAnn(id);
+});
+
+function clearAnnouncements(){
+  if (!confirm('Tüm duyurular silinsin mi?')) return;
+  saveAnns([]); renderAnnouncements();
+  flash('settings-flash','Duyurular silindi.','ok');
+  maybePushGist();
+}
+
+// ─────────────────────────────────────────────
+// FLAG  (MD5 intentionally weak — CTF challenge)
+// ─────────────────────────────────────────────
+function renderFlag(){
+  const raw  = localStorage.getItem(K.flag)    || '';
+  const hash = localStorage.getItem(K.flagMd5) || '';
+  if (raw){ setText('flag-raw', raw); setText('flag-md5', hash); updateFlagSnippet(hash); }
+}
+
+function generateFlag(){
+  const raw  = randStr(16);
+  const hash = md5(raw);
+  localStorage.setItem(K.flag, raw);
+  localStorage.setItem(K.flagMd5, hash);
+  setText('flag-raw', raw); setText('flag-md5', hash);
+  updateFlagSnippet(hash);
+  flash('flag-flash','Yeni flag üretildi ✓','ok');
+}
+
+function updateFlagSnippet(hash){
+  const snip =
+`// FLAG doğrulama — bu hash'i kaynak kodda bırak
+// FLAG formatı: FLAG{<16-karakter-dizi>}
+const FLAG_HASH = "${hash}"; // md5 of the flag value
+
+function checkFlag(input) {
+  const cleaned = input.replace(/^FLAG\\{(.+)\\}$/, '$1');
+  return md5(cleaned) === FLAG_HASH;
+}`;
+  document.getElementById('flag-snippet').textContent = snip;
+}
+
+function checkFlag(){
+  const raw   = localStorage.getItem(K.flag) || '';
+  const input = document.getElementById('flag-check-input').value.trim();
+  if (!raw){ flash('flag-check-flash','Önce bir flag üret.','bad'); return; }
+  const cleaned = input.replace(/^FLAG\{(.+)\}$/, '$1');
+  if (cleaned === raw || md5(cleaned) === localStorage.getItem(K.flagMd5)){
+    flash('flag-check-flash','✓ Doğru flag!','ok');
+  } else {
+    flash('flag-check-flash','✗ Yanlış flag.','bad');
+  }
+}
+
+function copyFlagSnippet(){
+  const txt = document.getElementById('flag-snippet').textContent;
+  navigator.clipboard.writeText(txt).then(() => flash('flag-flash','Kopyalandı!','ok'));
+}
+
+// ─────────────────────────────────────────────
+// PASSWORD ROTATION (rockyou.txt — CTF only)
+// ─────────────────────────────────────────────
+function loadRockyou(input){
+  const file = input.files[0]; if (!file) return;
+  flash('rk-load-flash','Okunuyor...','ok');
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 100000);
+    localStorage.setItem(K.rkWords, JSON.stringify(lines));
+    if (!localStorage.getItem(K.rkIdx)) localStorage.setItem(K.rkIdx, '0');
+    flash('rk-load-flash', `${lines.length} şifre yüklendi ✓`, 'ok');
+    renderRockyou();
+  };
+  reader.readAsText(file, 'latin1');
+}
+
+function renderRockyou(){
+  const words = getRkWords();
+  const idx   = parseInt(localStorage.getItem(K.rkIdx) || '0');
+  if (!words.length){
+    document.getElementById('rk-snippet').textContent = '— henüz rockyou.txt yüklenmedi —';
+    return;
+  }
+  const pw   = words[idx] || '';
+  const hash = md5(pw);
+  localStorage.setItem(K.rkMd5, hash);
+  localStorage.setItem(K.rkPw,  pw);
+  setText('rk-idx', `${idx} / ${words.length - 1}`);
+  setText('rk-cur', pw);
+  setText('rk-md5', hash);
+  document.getElementById('rk-snippet').textContent =
+`// WEAK PASSWORD HASH — crack me
+// username: admin
+const ADMIN_HASH = "${hash}"; // md5
+// hint: it's in rockyou.txt :)
+
+function checkLogin(user, pass) {
+  if (user !== "admin") return false;
+  return md5(pass) === ADMIN_HASH;
+}`;
+}
+
+function getRkWords(){try{return JSON.parse(localStorage.getItem(K.rkWords)||'[]')}catch{return[]}}
+
+function rotatePassword(){
+  const words = getRkWords();
+  if (!words.length){ flash('rk-flash','Önce rockyou.txt yükle.','bad'); return; }
+  let idx = parseInt(localStorage.getItem(K.rkIdx)||'0');
+  idx = (idx + 1) % words.length;
+  localStorage.setItem(K.rkIdx, String(idx));
+  renderRockyou();
+  flash('rk-flash', `Şifre rotasyonu yapıldı → indeks ${idx}`, 'ok');
+}
+
+function rotatePrev(){
+  const words = getRkWords(); if (!words.length) return;
+  let idx = parseInt(localStorage.getItem(K.rkIdx)||'0');
+  idx = (idx - 1 + words.length) % words.length;
+  localStorage.setItem(K.rkIdx, String(idx));
+  renderRockyou();
+}
+
+function jumpToIdx(){
+  const n = prompt('Hangi indekse git?'); if (n === null) return;
+  const words = getRkWords();
+  const idx = Math.max(0, Math.min(parseInt(n)||0, words.length - 1));
+  localStorage.setItem(K.rkIdx, String(idx));
+  renderRockyou();
+}
+
+function copyRkSnippet(){
+  const txt = document.getElementById('rk-snippet').textContent;
+  navigator.clipboard.writeText(txt).then(() => flash('rk-flash','Kopyalandı!','ok'));
+}
+
+// ─────────────────────────────────────────────
+// CONTACTS
+// ─────────────────────────────────────────────
+function renderContacts(){
+  const list = document.getElementById('contacts-list');
+  let entries = [];
+  try { entries = JSON.parse(localStorage.getItem('contact_entries') || '[]') } catch {}
+  if (!entries.length){
+    list.innerHTML = '<div class="card" style="color:var(--muted);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">henüz mesaj yok</div>';
+    return;
+  }
+  // Build DOM safely — no user data flows into onclick attributes
+  list.innerHTML = '';
+  entries.forEach((e, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head">
+        <div>
+          <div class="contact-name">${esc(e.name||'—')}</div>
+          <div class="contact-email">${esc(e.email||'—')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="card-date">${e.date ? new Date(e.date).toLocaleString('tr-TR') : ''}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:.3rem;color:var(--red)" data-contact-idx="${i}">Sil</button>
+        </div>
+      </div>
+      <span class="contact-subject">${esc(e.subject||'—')}</span>
+      <div class="card-body">${esc(e.message||'')}</div>`;
+    list.appendChild(card);
+  });
+}
+
+// Event delegation for contact delete buttons
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-contact-idx]');
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.contactIdx, 10);
+  if (!isNaN(idx)) deleteContact(idx);
+});
+
+function deleteContact(i){
+  const entries = JSON.parse(localStorage.getItem('contact_entries') || '[]');
+  entries.splice(i, 1);
+  localStorage.setItem('contact_entries', JSON.stringify(entries));
+  renderContacts();
+}
+
+// ─────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────
+function loadSettings(){
+  // GitHub token lives in sessionStorage only (cleared on tab close)
+  const t = sessionStorage.getItem('bfls_gh_token');
+  if (t) document.getElementById('gh-token').value = t;
+  const g = localStorage.getItem(K.ghGist);
+  if (g) document.getElementById('gh-gist').value = g;
+}
+
+function saveToken(){
+  // Token stays in sessionStorage — never persisted to localStorage
+  sessionStorage.setItem('bfls_gh_token', document.getElementById('gh-token').value);
+}
+function saveGist(){ localStorage.setItem(K.ghGist, document.getElementById('gh-gist').value) }
+
+async function changeAdminPw(){
+  const p1 = document.getElementById('set-pw1').value;
+  const p2 = document.getElementById('set-pw2').value;
+  if (!p1)        { flash('pw-flash','Şifre boş olamaz.','bad');    return; }
+  if (p1 !== p2)  { flash('pw-flash','Şifreler eşleşmiyor.','bad'); return; }
+  if (p1.length < 8) { flash('pw-flash','En az 8 karakter.','bad'); return; }
+
+  const changeBtn = document.getElementById('changePwBtn');
+  changeBtn.disabled = true;
+  changeBtn.textContent = 'Hash üretiliyor…';
+
+  try {
+    const hash = await new Promise((resolve, reject) => {
+      dcodeIO.bcrypt.hash(p1, 12, (err, h) => { if (err) reject(err); else resolve(h); });
+    });
+    localStorage.setItem(K.adminHash, hash);
+    document.getElementById('set-pw1').value = '';
+    document.getElementById('set-pw2').value = '';
+    flash('pw-flash','Şifre güncellendi ✓ — Çıkış yapılıyor…','ok');
+    // Force re-login so the new hash is tested immediately
+    setTimeout(logout, 2000);
+  } catch(e) {
+    flash('pw-flash','Hata: ' + e.message, 'bad');
+  } finally {
+    changeBtn.disabled = false;
+    changeBtn.textContent = 'Şifreyi Güncelle';
+  }
+}
+
+function exportData(){
+  const data = {
+    announcements: getAnns(),
+    flag: { raw: localStorage.getItem(K.flag), md5: localStorage.getItem(K.flagMd5) },
+    rockyou: { idx: localStorage.getItem(K.rkIdx), pw: localStorage.getItem(K.rkPw), md5: localStorage.getItem(K.rkMd5) },
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bflsiber-admin-export-${Date.now()}.json`;
+  a.click();
+}
+
+// ─────────────────────────────────────────────
+// GITHUB GIST (optional live sync)
+// ─────────────────────────────────────────────
+async function pushToGist(){
+  const token  = sessionStorage.getItem('bfls_gh_token'); // session-only
+  if (!token){ flash('gist-flash','Önce GitHub token gir.','bad'); return; }
+  const gistId = localStorage.getItem(K.ghGist);
+  const payload = {
+    announcements: getAnns(),
+    flag_md5:      localStorage.getItem(K.flagMd5) || '',
+    updated:       new Date().toISOString()
+  };
+  const body = {
+    description: 'BFLSiber public data',
+    public: true,
+    files: { 'bflsiber-data.json': { content: JSON.stringify(payload, null, 2) } }
+  };
+  try {
+    let url = 'https://api.github.com/gists'; let method = 'POST';
+    if (gistId) { url += `/${gistId}`; method = 'PATCH'; }
+    const r = await fetch(url, {
+      method,
+      headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    if (j.id){
+      localStorage.setItem(K.ghGist, j.id);
+      document.getElementById('gh-gist').value = j.id;
+      flash('gist-flash', `Gist güncellendi ✓ → https://gist.github.com/${j.id}`, 'ok');
+    } else { flash('gist-flash','Hata: ' + JSON.stringify(j),'bad') }
+  } catch(e) { flash('gist-flash','Fetch hatası: ' + e.message,'bad') }
+}
+
+async function testGist(){
+  const gistId = localStorage.getItem(K.ghGist);
+  if (!gistId){ flash('gist-flash','Gist ID yok.','bad'); return; }
+  const r = await fetch(`https://api.github.com/gists/${gistId}`);
+  if (r.ok) flash('gist-flash','Gist erişilebilir ✓','ok');
+  else       flash('gist-flash','Gist bulunamadı: ' + r.status,'bad');
+}
+
+async function maybePushGist(){
+  if (sessionStorage.getItem('bfls_gh_token') && localStorage.getItem(K.ghGist))
+    await pushToGist();
+}
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function esc(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+function setText(id, txt){
+  const el = document.getElementById(id);
+  if (el) el.childNodes[0].nodeValue = txt + ' ';
+}
+
+function copyEl(id){
+  const txt = document.getElementById(id).textContent.replace(/kopyala/,'').trim();
+  navigator.clipboard.writeText(txt).then(() => flash('flag-flash','Kopyalandı!','ok'));
+}
+
+function flash(id, msg, type){
+  const el = document.getElementById(id); if (!el) return;
+  el.textContent = msg; el.className = 'flash ' + type;
+  setTimeout(() => { el.className = 'flash'; el.textContent = ''; }, 4000);
+}
+</script>
+</body>
+</html>
