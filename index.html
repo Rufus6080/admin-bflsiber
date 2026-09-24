@@ -845,15 +845,30 @@ function exportData(){
 // ─────────────────────────────────────────────
 // GITHUB GIST (optional live sync)
 // ─────────────────────────────────────────────
+
+// Build the payload shape that the public site (bflsiber.pages.dev) expects:
+//   { passwordHash, announcements: [{title, content, date}], flag_md5, updated }
+// Note: field is "content" on the public side, "body" internally.
+function buildGistPayload() {
+  const anns = getAnns().map(a => ({
+    title:   a.title,
+    content: a.body,          // public site reads "content"
+    date:    a.date,
+    pinned:  a.pinned || false
+  }));
+  return {
+    passwordHash: getStoredHash(),   // bcrypt hash — public site uses this for its own login if needed
+    announcements: anns,
+    flag_md5: localStorage.getItem(K.flagMd5) || '',
+    updated:  new Date().toISOString()
+  };
+}
+
 async function pushToGist(){
   const token  = sessionStorage.getItem('bfls_gh_token'); // session-only
   if (!token){ flash('gist-flash','Önce GitHub token gir.','bad'); return; }
   const gistId = localStorage.getItem(K.ghGist);
-  const payload = {
-    announcements: getAnns(),
-    flag_md5:      localStorage.getItem(K.flagMd5) || '',
-    updated:       new Date().toISOString()
-  };
+  const payload = buildGistPayload();
   const body = {
     description: 'BFLSiber public data',
     public: true,
@@ -876,12 +891,41 @@ async function pushToGist(){
   } catch(e) { flash('gist-flash','Fetch hatası: ' + e.message,'bad') }
 }
 
+// Read back from Gist using raw_url to avoid CORS/parse issues.
+// Returns parsed JSON payload, or null on failure.
+async function fetchGistPayload() {
+  const gistId = localStorage.getItem(K.ghGist);
+  if (!gistId) return null;
+  try {
+    // Step 1: get file metadata (fast, CORS-safe without auth header)
+    const metaRes = await fetch(`https://api.github.com/gists/${gistId}`, { cache: 'no-cache' });
+    if (!metaRes.ok) return null;
+    const meta  = await metaRes.json();
+    const files = meta.files || {};
+    const file  = files['bflsiber-data.json'] || files[Object.keys(files)[0]];
+    if (!file) return null;
+
+    // Step 2: fetch raw content directly — bypasses CORS preflight & always fresh
+    const rawRes = await fetch(file.raw_url, { cache: 'no-cache' });
+    if (!rawRes.ok) return null;
+    return await rawRes.json();
+  } catch(e) {
+    console.error('Gist fetch error:', e);
+    return null;
+  }
+}
+
 async function testGist(){
   const gistId = localStorage.getItem(K.ghGist);
   if (!gistId){ flash('gist-flash','Gist ID yok.','bad'); return; }
-  const r = await fetch(`https://api.github.com/gists/${gistId}`);
-  if (r.ok) flash('gist-flash','Gist erişilebilir ✓','ok');
-  else       flash('gist-flash','Gist bulunamadı: ' + r.status,'bad');
+  flash('gist-flash','Kontrol ediliyor…','ok');
+  const payload = await fetchGistPayload();
+  if (!payload) {
+    flash('gist-flash','Gist bulunamadı veya içerik okunamadı.','bad');
+    return;
+  }
+  const count = Array.isArray(payload.announcements) ? payload.announcements.length : '?';
+  flash('gist-flash', `Gist erişilebilir ✓ — ${count} duyuru mevcut`, 'ok');
 }
 
 async function maybePushGist(){
