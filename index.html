@@ -258,10 +258,12 @@ h2{font-size:1.35rem;font-weight:300;letter-spacing:-.02em;margin-bottom:1.75rem
     <div id="page-contacts" class="page">
       <div class="page-label">// iletişim formu gönderileri</div>
       <h2>Inbox</h2>
-      <p style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem">
-        Kullanıcıların bflsiber.pages.dev/contact.html üzerinden gönderdiği mesajlar.
-        Aynı tarayıcıda açıksan LocalStorage'dan otomatik çekilir.
-      </p>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+        <p style="font-size:.8rem;color:var(--muted)">
+          bflsiber.pages.dev/contact.html üzerinden gelen mesajlar.
+        </p>
+        <button class="btn btn-ghost btn-sm" onclick="renderContacts()">↻ Yenile</button>
+      </div>
       <div id="contacts-list"></div>
     </div>
 
@@ -483,6 +485,12 @@ async function doLogin() {
       const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
                          .map(b => b.toString(16).padStart(2,'0')).join('');
       sessionStorage.setItem('bfls_admin_token', token);
+      // Register the token with the Pages Function so it can validate header auth
+      fetch('https://admin-bflsiber.pages.dev/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      }).catch(() => {}); // fire-and-forget; login still works if this fails
       showShell();
     } else {
       loginAttempts++;
@@ -751,51 +759,72 @@ function copyRkSnippet(){
 }
 
 // ─────────────────────────────────────────────
-// CONTACTS
+// CONTACTS  (fetched from KV via Pages Function)
 // ─────────────────────────────────────────────
-function renderContacts(){
+const CONTACTS_API = 'https://admin-bflsiber.pages.dev/contacts';
+
+function contactsAuthHeader() {
+  return { 'X-Admin-Token': sessionStorage.getItem('bfls_admin_token') || '' };
+}
+
+async function renderContacts(){
   const list = document.getElementById('contacts-list');
-  let entries = [];
-  try { entries = JSON.parse(localStorage.getItem('contact_entries') || '[]') } catch {}
-  if (!entries.length){
-    list.innerHTML = '<div class="card" style="color:var(--muted);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">henüz mesaj yok</div>';
-    return;
+  list.innerHTML = '<div class="card" style="color:var(--muted);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">Yükleniyor…</div>';
+  try {
+    const res = await fetch(CONTACTS_API, { headers: contactsAuthHeader() });
+    if (res.status === 401) {
+      list.innerHTML = '<div class="card" style="color:var(--red);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">Yetkisiz erişim.</div>';
+      return;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const entries = await res.json();
+    if (!entries.length){
+      list.innerHTML = '<div class="card" style="color:var(--muted);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">henüz mesaj yok</div>';
+      return;
+    }
+    list.innerHTML = '';
+    entries.forEach(e => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-head">
+          <div>
+            <div class="contact-name">${esc(e.name||'—')}</div>
+            <div class="contact-email">${esc(e.email||'—')}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="card-date">${e.date ? new Date(e.date).toLocaleString('tr-TR') : ''}</div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:.3rem;color:var(--red)" data-contact-id="${esc(e.id)}">Sil</button>
+          </div>
+        </div>
+        <span class="contact-subject">${esc(e.subject||'—')}</span>
+        <div class="card-body">${esc(e.message||'')}</div>`;
+      list.appendChild(card);
+    });
+  } catch(err) {
+    list.innerHTML = `<div class="card" style="color:var(--red);font-family:var(--mono);font-size:.8rem;text-align:center;padding:2rem">Hata: ${esc(err.message)}</div>`;
   }
-  // Build DOM safely — no user data flows into onclick attributes
-  list.innerHTML = '';
-  entries.forEach((e, i) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="card-head">
-        <div>
-          <div class="contact-name">${esc(e.name||'—')}</div>
-          <div class="contact-email">${esc(e.email||'—')}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="card-date">${e.date ? new Date(e.date).toLocaleString('tr-TR') : ''}</div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:.3rem;color:var(--red)" data-contact-idx="${i}">Sil</button>
-        </div>
-      </div>
-      <span class="contact-subject">${esc(e.subject||'—')}</span>
-      <div class="card-body">${esc(e.message||'')}</div>`;
-    list.appendChild(card);
-  });
 }
 
 // Event delegation for contact delete buttons
 document.addEventListener('click', e => {
-  const btn = e.target.closest('[data-contact-idx]');
+  const btn = e.target.closest('[data-contact-id]');
   if (!btn) return;
-  const idx = parseInt(btn.dataset.contactIdx, 10);
-  if (!isNaN(idx)) deleteContact(idx);
+  deleteContact(btn.dataset.contactId);
 });
 
-function deleteContact(i){
-  const entries = JSON.parse(localStorage.getItem('contact_entries') || '[]');
-  entries.splice(i, 1);
-  localStorage.setItem('contact_entries', JSON.stringify(entries));
-  renderContacts();
+async function deleteContact(id){
+  if (!id) return;
+  try {
+    const res = await fetch(`${CONTACTS_API}?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: contactsAuthHeader()
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    renderContacts();
+  } catch(err) {
+    flash('settings-flash', 'Silinemedi: ' + err.message, 'bad');
+  }
 }
 
 // ─────────────────────────────────────────────
