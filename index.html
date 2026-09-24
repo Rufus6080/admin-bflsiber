@@ -287,6 +287,20 @@ h2{font-size:1.35rem;font-weight:300;letter-spacing:-.02em;margin-bottom:1.75rem
         <div class="flash" id="settings-flash"></div>
       </div>
 
+
+      <div class="card" style="margin-top:.75rem">
+        <div class="page-label" style="margin-bottom:.75rem">// public admin.html şifresi</div>
+        <p class="setup-info">
+          <code>bflsiber.pages.dev/admin.html</code> giriş şifresi. Buradan belirle,
+          ardından Gist'e yaz — public site Gist'ten okur.
+        </p>
+        <div class="field"><label>yeni public şifre</label>
+          <input type="password" id="pub-pw" placeholder="••••••••" autocomplete="off">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="savePublicPw()">Kaydet ✓</button>
+        <div class="flash" id="pubpw-flash"></div>
+      </div>
+
       <div class="card" style="margin-top:.75rem">
         <div class="page-label" style="margin-bottom:.75rem">// public site entegrasyonu</div>
         <p class="setup-info">
@@ -330,6 +344,7 @@ const K = {
   rkPw:      'bfls_rk_pw',
   // GitHub token lives in sessionStorage only (cleared on tab close)
   ghGist:    'bfls_gh_gist',
+  pubPwHash: 'bfls_pub_pw_hash',  // SHA-256 hash of the public admin.html password
 };
 
 // ─────────────────────────────────────────────
@@ -846,18 +861,38 @@ function exportData(){
 // GITHUB GIST (optional live sync)
 // ─────────────────────────────────────────────
 
+// SHA-256 helper (for the public password — NOT used for private admin login)
+async function sha256hex(str) {
+  const buf  = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// Save the public admin.html password as SHA-256 in localStorage
+async function savePublicPw() {
+  const pw = document.getElementById('pub-pw').value;
+  if (!pw) { flash('pubpw-flash', 'Şifre boş.', 'bad'); return; }
+  const hash = await sha256hex(pw);
+  localStorage.setItem(K.pubPwHash, hash);
+  document.getElementById('pub-pw').value = '';
+  flash('pubpw-flash', "Kaydedildi ✓ — şimdi Gist'e yaz.", 'ok');
+}
+
 // Build the payload shape that the public site (bflsiber.pages.dev) expects:
 //   { passwordHash, announcements: [{title, content, date}], flag_md5, updated }
+// passwordHash = SHA-256 of the public admin password (set via savePublicPw)
 // Note: field is "content" on the public side, "body" internally.
 function buildGistPayload() {
+  const pubHash = localStorage.getItem(K.pubPwHash) || '';
+  if (!pubHash) console.warn('[admin] no public password set — passwordHash will be empty in Gist');
   const anns = getAnns().map(a => ({
     title:   a.title,
-    content: a.body,          // public site reads "content"
+    content: a.body,
     date:    a.date,
     pinned:  a.pinned || false
   }));
   return {
-    passwordHash: getStoredHash(),   // bcrypt hash — public site uses this for its own login if needed
+    passwordHash: pubHash,
     announcements: anns,
     flag_md5: localStorage.getItem(K.flagMd5) || '',
     updated:  new Date().toISOString()
